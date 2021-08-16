@@ -1,0 +1,331 @@
+{
+	"compiler": {
+		"version": "0.7.6+commit.7338295f"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "_period",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "_startTime",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "_startEpoch",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "nonpayable",
+				"type": "constructor"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "previousOperator",
+						"type": "address"
+					},
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "newOperator",
+						"type": "address"
+					}
+				],
+				"name": "OperatorTransferred",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "previousOwner",
+						"type": "address"
+					},
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "newOwner",
+						"type": "address"
+					}
+				],
+				"name": "OwnershipTransferred",
+				"type": "event"
+			},
+			{
+				"inputs": [],
+				"name": "callable",
+				"outputs": [
+					{
+						"internalType": "bool",
+						"name": "",
+						"type": "bool"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "getCurrentEpoch",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "getLastEpoch",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "getNextEpoch",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "getPeriod",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "getStartTime",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "isOperator",
+				"outputs": [
+					{
+						"internalType": "bool",
+						"name": "",
+						"type": "bool"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "nextEpochPoint",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "operator",
+				"outputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "owner",
+				"outputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "renounceOwnership",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "_period",
+						"type": "uint256"
+					}
+				],
+				"name": "setPeriod",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "newOperator_",
+						"type": "address"
+					}
+				],
+				"name": "transferOperator",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "newOwner",
+						"type": "address"
+					}
+				],
+				"name": "transferOwnership",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			}
+		],
+		"devdoc": {
+			"kind": "dev",
+			"methods": {
+				"owner()": {
+					"details": "Returns the address of the current owner."
+				},
+				"renounceOwnership()": {
+					"details": "Leaves the contract without owner. It will not be possible to call `onlyOwner` functions anymore. Can only be called by the current owner. NOTE: Renouncing ownership will leave the contract without an owner, thereby removing any functionality that is only available to the owner."
+				},
+				"transferOwnership(address)": {
+					"details": "Transfers ownership of the contract to a new account (`newOwner`). Can only be called by the current owner."
+				}
+			},
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"elc/utils/Epoch.sol": "Epoch"
+		},
+		"evmVersion": "istanbul",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": false,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"elc/libraries/Math.sol": {
+			"keccak256": "0xf6e9c2f0c3db8e5f2315bfb3e80f7df81662b489a9c6cd3ecbf74469641287f8",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://cc757eea8cf8a1a42341832dadf512df00b8e55437b0c4145d81db1a025366a7",
+				"dweb:/ipfs/QmULdC87Qdnzw4enSbmieFcQPJHSk36abtu5vYdpz9XkFZ"
+			]
+		},
+		"elc/libraries/SafeMath.sol": {
+			"keccak256": "0xc51d034a64ee4f8c3ffbc65ba5072fe4a671cb191ef299f588cde5184507b604",
+			"license": "CC-BY-4.0",
+			"urls": [
+				"bzz-raw://f061a7b63bf69f0bb137d35200c9c6587532dd3390e68c1da41f4c48a7533828",
+				"dweb:/ipfs/QmXqetuPRyH2CLaxtgX4GjZRZrwGAiHa5bAF4i314N7g2g"
+			]
+		},
+		"elc/utils/Context.sol": {
+			"keccak256": "0x3ce33d106c44d95645a5799f7893af897fdb27017bb105c1c760f29ac6e1a7ca",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://209589590d67a6039f7a5288ba1ec7a5807e954f73fb35d86b6205f77ab33b74",
+				"dweb:/ipfs/Qmeui8dZSX6z8hawftZrFQNEnxtNsPPE4YApLVt5p4BTeN"
+			]
+		},
+		"elc/utils/Epoch.sol": {
+			"keccak256": "0x90139cb95b5d7dc06fc660af6fb9e8b95ea3852dfffbfaa47c0a5c1c6b79006d",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://ba9cffd04a5739babe711fee2faf198ec39c8f3712e916c51bb10f45b26f0e35",
+				"dweb:/ipfs/QmedJU7NTxwrTH23SsEeZTenHmV7UWtQBvWsiWp2FLJ2WN"
+			]
+		},
+		"elc/utils/Operator.sol": {
+			"keccak256": "0x255ddb7f3832776d9bcaaa5290e3bc662e00e817b05496de20a7cb4c45255de3",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://114632e292d1468be4293fe5cd94ea7a535febdd39578d5091823eda38a841ca",
+				"dweb:/ipfs/QmUX3SpEz8RuBBWj1NkSDHHy5sJ5SyvnWGbWwfDmVVqtvU"
+			]
+		},
+		"elc/utils/Ownable.sol": {
+			"keccak256": "0xac85955a26f34ed806ff38a0998501c0d7bafdf82cd4ea011c485b3a4bc8b75a",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://74041935350c37f17d9ab775a275076bc1a68f5f2721a19cef91e22f63382634",
+				"dweb:/ipfs/QmRD8idrUsEWxNG4nGPBSdpo6LdrhABZyE4kiKPPCPKC1m"
+			]
+		}
+	},
+	"version": 1
+}

@@ -1,0 +1,182 @@
+{
+	"compiler": {
+		"version": "0.7.6+commit.7338295f"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "previousOperator",
+						"type": "address"
+					},
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "newOperator",
+						"type": "address"
+					}
+				],
+				"name": "OperatorTransferred",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "previousOwner",
+						"type": "address"
+					},
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "newOwner",
+						"type": "address"
+					}
+				],
+				"name": "OwnershipTransferred",
+				"type": "event"
+			},
+			{
+				"inputs": [],
+				"name": "isOperator",
+				"outputs": [
+					{
+						"internalType": "bool",
+						"name": "",
+						"type": "bool"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "operator",
+				"outputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "owner",
+				"outputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "renounceOwnership",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "newOperator_",
+						"type": "address"
+					}
+				],
+				"name": "transferOperator",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "newOwner",
+						"type": "address"
+					}
+				],
+				"name": "transferOwnership",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			}
+		],
+		"devdoc": {
+			"kind": "dev",
+			"methods": {
+				"owner()": {
+					"details": "Returns the address of the current owner."
+				},
+				"renounceOwnership()": {
+					"details": "Leaves the contract without owner. It will not be possible to call `onlyOwner` functions anymore. Can only be called by the current owner. NOTE: Renouncing ownership will leave the contract without an owner, thereby removing any functionality that is only available to the owner."
+				},
+				"transferOwnership(address)": {
+					"details": "Transfers ownership of the contract to a new account (`newOwner`). Can only be called by the current owner."
+				}
+			},
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"elc/utils/Operator.sol": "Operator"
+		},
+		"evmVersion": "istanbul",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": false,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"elc/utils/Context.sol": {
+			"keccak256": "0x3ce33d106c44d95645a5799f7893af897fdb27017bb105c1c760f29ac6e1a7ca",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://209589590d67a6039f7a5288ba1ec7a5807e954f73fb35d86b6205f77ab33b74",
+				"dweb:/ipfs/Qmeui8dZSX6z8hawftZrFQNEnxtNsPPE4YApLVt5p4BTeN"
+			]
+		},
+		"elc/utils/Operator.sol": {
+			"keccak256": "0xfcc714868bf8cce7c8884d776f266e1bbdbc403fa5595e6a749842d8b5544176",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://bc4f3c1532708f7c9d33fe80d7851716352126eaa7dafb6bb897f0f0277f6a6a",
+				"dweb:/ipfs/QmT15zdCkpJvP8q2bF6zufqQRVYFGHKp49Yvv3nDuzQShZ"
+			]
+		},
+		"elc/utils/Ownable.sol": {
+			"keccak256": "0xac85955a26f34ed806ff38a0998501c0d7bafdf82cd4ea011c485b3a4bc8b75a",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://74041935350c37f17d9ab775a275076bc1a68f5f2721a19cef91e22f63382634",
+				"dweb:/ipfs/QmRD8idrUsEWxNG4nGPBSdpo6LdrhABZyE4kiKPPCPKC1m"
+			]
+		}
+	},
+	"version": 1
+}
