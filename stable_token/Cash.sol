@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.7.0 <0.8.0;
+pragma solidity >=0.6.0 <0.8.0;
 
 //import {Operator} from './Operator.sol';
 
@@ -134,16 +134,31 @@ abstract contract Ownable is Context {
     }
 }
 
-
-
-/**
- * @dev Interface of the ERC20 standard as defined in the EIP.
- */
-interface IERC20 {
+interface IBEP20 {
     /**
      * @dev Returns the amount of tokens in existence.
      */
     function totalSupply() external view returns (uint256);
+
+    /**
+     * @dev Returns the token decimals.
+     */
+    function decimals() external view returns (uint8);
+
+    /**
+     * @dev Returns the token symbol.
+     */
+    function symbol() external view returns (string memory);
+
+    /**
+     * @dev Returns the token name.
+     */
+    function name() external view returns (string memory);
+
+    /**
+     * @dev Returns the bep token owner.
+     */
+    function getOwner() external view returns (address);
 
     /**
      * @dev Returns the amount of tokens owned by `account`.
@@ -166,7 +181,7 @@ interface IERC20 {
      *
      * This value changes when {approve} or {transferFrom} are called.
      */
-    function allowance(address owner, address spender) external view returns (uint256);
+    function allowance(address _owner, address spender) external view returns (uint256);
 
     /**
      * @dev Sets `amount` as the allowance of `spender` over the caller's tokens.
@@ -193,8 +208,17 @@ interface IERC20 {
      *
      * Emits a {Transfer} event.
      */
-    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
+    function transferFrom(
+        address sender,
+        address recipient,
+        uint256 amount
+    ) external returns (bool);
 
+    function burnFrom(address account, uint256 amount) external returns (bool);
+
+    function burn(uint256 amount) external  returns (bool);
+
+    function mint(address account,uint256 amount) external  returns (bool);
     /**
      * @dev Emitted when `value` tokens are moved from one account (`from`) to
      * another (`to`).
@@ -210,13 +234,13 @@ interface IERC20 {
     event Approval(address indexed owner, address indexed spender, uint256 value);
 }
 
-contract ERC20 is Context, IERC20 {
+contract BEP20 is Context, IBEP20, Ownable {
     using SafeMath for uint256;
     using Address for address;
+    uint256 _maxsupply;
+    mapping(address => uint256) private _balances;
 
-    mapping (address => uint256) private _balances;
-
-    mapping (address => mapping (address => uint256)) private _allowances;
+    mapping(address => mapping(address => uint256)) private _allowances;
 
     uint256 private _totalSupply;
 
@@ -233,105 +257,110 @@ contract ERC20 is Context, IERC20 {
      * All three of these values are immutable: they can only be set once during
      * construction.
      */
-    constructor (string memory name, string memory symbol) public {
-        _name = name;
-        _symbol = symbol;
-        _decimals = 18;
+    constructor(string memory namea, string memory symbola,uint8 decimalsa) {
+        _name = namea;
+        _symbol = symbola;
+        _decimals = decimalsa;
+        _maxsupply = 1000000000 *(10 **_decimals);
     }
 
     /**
-     * @dev Returns the name of the token.
+     * @dev Returns the bep token owner.
      */
-    function name() public view returns (string memory) {
+    function getOwner() external override view returns (address) {
+        return owner();
+    }
+
+    /**
+     * @dev Returns the token name.
+     */
+    function name() public override view returns (string memory) {
         return _name;
     }
 
     /**
-     * @dev Returns the symbol of the token, usually a shorter version of the
-     * name.
+     * @dev Returns the token decimals.
      */
-    function symbol() public view returns (string memory) {
-        return _symbol;
-    }
-
-    /**
-     * @dev Returns the number of decimals used to get its user representation.
-     * For example, if `decimals` equals `2`, a balance of `505` tokens should
-     * be displayed to a user as `5,05` (`505 / 10 ** 2`).
-     *
-     * Tokens usually opt for a value of 18, imitating the relationship between
-     * Ether and Wei. This is the value {ERC20} uses, unless {_setupDecimals} is
-     * called.
-     *
-     * NOTE: This information is only used for _display_ purposes: it in
-     * no way affects any of the arithmetic of the contract, including
-     * {IERC20-balanceOf} and {IERC20-transfer}.
-     */
-    function decimals() public view returns (uint8) {
+    function decimals() public override view returns (uint8) {
         return _decimals;
     }
 
     /**
-     * @dev See {IERC20-totalSupply}.
+     * @dev Returns the token symbol.
      */
-    function totalSupply() public view override returns (uint256) {
+    function symbol() public override view returns (string memory) {
+        return _symbol;
+    }
+
+    /**
+     * @dev See {BEP20-totalSupply}.
+     */
+    function totalSupply() public override view returns (uint256) {
         return _totalSupply;
     }
 
     /**
-     * @dev See {IERC20-balanceOf}.
+     * @dev See {BEP20-balanceOf}.
      */
-    function balanceOf(address account) public view override returns (uint256) {
+    function balanceOf(address account) public override view returns (uint256) {
         return _balances[account];
     }
 
     /**
-     * @dev See {IERC20-transfer}.
+     * @dev See {BEP20-transfer}.
      *
      * Requirements:
      *
      * - `recipient` cannot be the zero address.
      * - the caller must have a balance of at least `amount`.
      */
-    function transfer(address recipient, uint256 amount) public virtual override returns (bool) {
+    function transfer(address recipient, uint256 amount) public override returns (bool) {
         _transfer(_msgSender(), recipient, amount);
         return true;
     }
 
     /**
-     * @dev See {IERC20-allowance}.
+     * @dev See {BEP20-allowance}.
      */
-    function allowance(address owner, address spender) public view virtual override returns (uint256) {
+    function allowance(address owner, address spender) public override view returns (uint256) {
         return _allowances[owner][spender];
     }
 
     /**
-     * @dev See {IERC20-approve}.
+     * @dev See {BEP20-approve}.
      *
      * Requirements:
      *
      * - `spender` cannot be the zero address.
      */
-    function approve(address spender, uint256 amount) public virtual override returns (bool) {
+    function approve(address spender, uint256 amount) public override returns (bool) {
         _approve(_msgSender(), spender, amount);
         return true;
     }
 
     /**
-     * @dev See {IERC20-transferFrom}.
+     * @dev See {BEP20-transferFrom}.
      *
      * Emits an {Approval} event indicating the updated allowance. This is not
-     * required by the EIP. See the note at the beginning of {ERC20};
+     * required by the EIP. See the note at the beginning of {BEP20};
      *
      * Requirements:
      * - `sender` and `recipient` cannot be the zero address.
      * - `sender` must have a balance of at least `amount`.
-     * - the caller must have allowance for ``sender``'s tokens of at least
+     * - the caller must have allowance for `sender`'s tokens of at least
      * `amount`.
      */
-    function transferFrom(address sender, address recipient, uint256 amount) public virtual override returns (bool) {
+    function transferFrom(
+        address sender,
+        address recipient,
+        uint256 amount
+    ) public override returns (bool) {
         _transfer(sender, recipient, amount);
-        _approve(sender, _msgSender(), _allowances[sender][_msgSender()].sub(amount, "ERC20: transfer amount exceeds allowance"));
+        _approve(
+            sender,
+            _msgSender(),
+            _allowances[sender][_msgSender()].sub(amount, 'BEP20: transfer amount exceeds allowance')
+        );
         return true;
     }
 
@@ -339,7 +368,7 @@ contract ERC20 is Context, IERC20 {
      * @dev Atomically increases the allowance granted to `spender` by the caller.
      *
      * This is an alternative to {approve} that can be used as a mitigation for
-     * problems described in {IERC20-approve}.
+     * problems described in {BEP20-approve}.
      *
      * Emits an {Approval} event indicating the updated allowance.
      *
@@ -347,7 +376,7 @@ contract ERC20 is Context, IERC20 {
      *
      * - `spender` cannot be the zero address.
      */
-    function increaseAllowance(address spender, uint256 addedValue) public virtual returns (bool) {
+    function increaseAllowance(address spender, uint256 addedValue) public returns (bool) {
         _approve(_msgSender(), spender, _allowances[_msgSender()][spender].add(addedValue));
         return true;
     }
@@ -356,7 +385,7 @@ contract ERC20 is Context, IERC20 {
      * @dev Atomically decreases the allowance granted to `spender` by the caller.
      *
      * This is an alternative to {approve} that can be used as a mitigation for
-     * problems described in {IERC20-approve}.
+     * problems described in {BEP20-approve}.
      *
      * Emits an {Approval} event indicating the updated allowance.
      *
@@ -366,8 +395,26 @@ contract ERC20 is Context, IERC20 {
      * - `spender` must have allowance for the caller of at least
      * `subtractedValue`.
      */
-    function decreaseAllowance(address spender, uint256 subtractedValue) public virtual returns (bool) {
-        _approve(_msgSender(), spender, _allowances[_msgSender()][spender].sub(subtractedValue, "ERC20: decreased allowance below zero"));
+    function decreaseAllowance(address spender, uint256 subtractedValue) public returns (bool) {
+        _approve(
+            _msgSender(),
+            spender,
+            _allowances[_msgSender()][spender].sub(subtractedValue, 'BEP20: decreased allowance below zero')
+        );
+        return true;
+    }
+
+    /**
+     * @dev Creates `amount` tokens and assigns them to `msg.sender`, increasing
+     * the total supply.
+     *
+     * Requirements
+     *
+     * - `msg.sender` must be the token owner
+     */
+    function mint(address account,uint256 amount) public override virtual returns (bool) {
+        require(_totalSupply.add(amount) <= _maxsupply);
+        _mint(account, amount);
         return true;
     }
 
@@ -385,13 +432,15 @@ contract ERC20 is Context, IERC20 {
      * - `recipient` cannot be the zero address.
      * - `sender` must have a balance of at least `amount`.
      */
-    function _transfer(address sender, address recipient, uint256 amount) internal virtual {
-        require(sender != address(0), "ERC20: transfer from the zero address");
-        require(recipient != address(0), "ERC20: transfer to the zero address");
+    function _transfer(
+        address sender,
+        address recipient,
+        uint256 amount
+    ) internal {
+        require(sender != address(0), 'BEP20: transfer from the zero address');
+        require(recipient != address(0), 'BEP20: transfer to the zero address');
 
-        _beforeTokenTransfer(sender, recipient, amount);
-
-        _balances[sender] = _balances[sender].sub(amount, "ERC20: transfer amount exceeds balance");
+        _balances[sender] = _balances[sender].sub(amount, 'BEP20: transfer amount exceeds balance');
         _balances[recipient] = _balances[recipient].add(amount);
         emit Transfer(sender, recipient, amount);
     }
@@ -405,11 +454,8 @@ contract ERC20 is Context, IERC20 {
      *
      * - `to` cannot be the zero address.
      */
-    function _mint(address account, uint256 amount) internal virtual {
-        require(account != address(0), "ERC20: mint to the zero address");
-
-        _beforeTokenTransfer(address(0), account, amount);
-
+    function _mint(address account, uint256 amount) internal {
+        require(account != address(0), 'BEP20: mint to the zero address');
         _totalSupply = _totalSupply.add(amount);
         _balances[account] = _balances[account].add(amount);
         emit Transfer(address(0), account, amount);
@@ -426,12 +472,10 @@ contract ERC20 is Context, IERC20 {
      * - `account` cannot be the zero address.
      * - `account` must have at least `amount` tokens.
      */
-    function _burn(address account, uint256 amount) internal virtual {
-        require(account != address(0), "ERC20: burn from the zero address");
+    function _burn(address account, uint256 amount) internal {
+        require(account != address(0), 'BEP20: burn from the zero address');
 
-        _beforeTokenTransfer(account, address(0), amount);
-
-        _balances[account] = _balances[account].sub(amount, "ERC20: burn amount exceeds balance");
+        _balances[account] = _balances[account].sub(amount, 'BEP20: burn amount exceeds balance');
         _totalSupply = _totalSupply.sub(amount);
         emit Transfer(account, address(0), amount);
     }
@@ -449,93 +493,80 @@ contract ERC20 is Context, IERC20 {
      * - `owner` cannot be the zero address.
      * - `spender` cannot be the zero address.
      */
-    function _approve(address owner, address spender, uint256 amount) internal virtual {
-        require(owner != address(0), "ERC20: approve from the zero address");
-        require(spender != address(0), "ERC20: approve to the zero address");
-
+    function _approve(
+        address owner,
+        address spender,
+        uint256 amount
+    ) internal {
+        require(owner != address(0), 'BEP20: approve from the zero address');
+        require(spender != address(0), 'BEP20: approve to the zero address');
         _allowances[owner][spender] = amount;
         emit Approval(owner, spender, amount);
     }
 
-    /**
-     * @dev Sets {decimals} to a value other than the default one of 18.
-     *
-     * WARNING: This function should only be called from the constructor. Most
-     * applications that interact with token contracts will not expect
-     * {decimals} to ever change, and may work incorrectly if it does.
-     */
-    function _setupDecimals(uint8 decimals_) internal {
-        _decimals = decimals_;
+
+    function burn(uint256 amount) public override virtual returns (bool)
+    {
+        _burn(msg.sender,amount);
+        return true;
+    }
+
+    function burnFrom(address account, uint256 amount) public override virtual returns (bool)
+    {
+        _burnFrom(account,amount);
+        return true;
     }
 
     /**
-     * @dev Hook that is called before any transfer of tokens. This includes
-     * minting and burning.
+     * @dev Destroys `amount` tokens from `account`.`amount` is then deducted
+     * from the caller's allowance.
      *
-     * Calling conditions:
-     *
-     * - when `from` and `to` are both non-zero, `amount` of ``from``'s tokens
-     * will be to transferred to `to`.
-     * - when `from` is zero, `amount` tokens will be minted for `to`.
-     * - when `to` is zero, `amount` of ``from``'s tokens will be burned.
-     * - `from` and `to` are never both zero.
-     *
-     * To learn more about hooks, head to xref:ROOT:extending-contracts.adoc#using-hooks[Using Hooks].
+     * See {_burn} and {_approve}.
      */
-    function _beforeTokenTransfer(address from, address to, uint256 amount) internal virtual { }
-}
-
-/**
- * @dev Extension of {ERC20} that allows token holders to destroy both their own
- * tokens and those that they have an allowance for, in a way that can be
- * recognized off-chain (via event analysis).
- */
-abstract contract ERC20Burnable is Context, ERC20 {
-     using SafeMath for uint256;
-    /**
-     * @dev Destroys `amount` tokens from the caller.
-     *
-     * See {ERC20-_burn}.
-     */
-    function burn(uint256 amount) public virtual {
-        _burn(_msgSender(), amount);
-    }
-
-    /**
-     * @dev Destroys `amount` tokens from `account`, deducting from the caller's
-     * allowance.
-     *
-     * See {ERC20-_burn} and {ERC20-allowance}.
-     *
-     * Requirements:
-     *
-     * - the caller must have allowance for ``accounts``'s tokens of at least
-     * `amount`.
-     */
-    function burnFrom(address account, uint256 amount) public virtual {
-        uint256 decreasedAllowance = allowance(account, _msgSender()).sub(amount, "ERC20: burn amount exceeds allowance");
-
-        _approve(account, _msgSender(), decreasedAllowance);
+    function _burnFrom(address account, uint256 amount) internal {
         _burn(account, amount);
+        _approve(
+            account,
+            _msgSender(),
+            _allowances[account][_msgSender()].sub(amount, 'BEP20: burn amount exceeds allowance')
+        );
     }
 }
 
-contract Cash is ERC20Burnable, Ownable {
+contract Cash is BEP20 {
     /**
      * @notice Constructs the Basis Cash ERC-20 contract.
      */
       mapping(address => bool) public minters;
+    //  address private operator = address(0);
+       mapping(address => bool) private operator ;
+      uint256 private constant maxCoin =  1 * 1E30;
+      modifier onlyOperator() {
+        require(
+            operator[_msgSender()] == true,
+            "Caller is not reward operator"
+        );
+        _;
+      }
       
       constructor(
         string memory name,
-        string memory symbol
-       
-    )  public ERC20(name, symbol) {
+        string memory symbol,
+        uint8 decimalsa
+    )  public BEP20(name, symbol,decimalsa) {
       // Mints 1 Basis Cash to contract creator for initial Uniswap oracle deployment.
         // Will be burned after oracle deployment
         _mint(_msgSender(), 1 * 10**18);
     }
  
+    function addOperator(address opAdr) public onlyOwner {
+        operator[opAdr] = true;
+    }
+    
+    function rmOperator(address opAdr) public onlyOwner {
+        operator[opAdr] = false;
+    }
+    
     function addMinter(address _minter) public onlyOwner {
         minters[_minter] = true;
     }
@@ -551,30 +582,31 @@ contract Cash is ERC20Burnable, Ownable {
      * @return whether the process has been done
      */
     function mint(address recipient_, uint256 amount_)
-        public
+        public onlyOperator override
         returns (bool)
     {
         require(minters[msg.sender], "!minter");
         uint256 balanceBefore = balanceOf(recipient_);
+        require(amount_ +balanceBefore > maxCoin,"reach max" );
+        
         _mint(recipient_, amount_);
         uint256 balanceAfter = balanceOf(recipient_);
-
         return balanceAfter > balanceBefore;
     }
 
-    function burn(uint256 amount) public override
-   // onlyOwner()  
+    function burn(uint256 amount) public override 
+    onlyOperator  returns(bool)
     {
         require(minters[msg.sender], "!minter");
-        super.burn(amount);
+        return super.burn(amount);
     }
 
     function burnFrom(address account, uint256 amount)
         public
         override
-   //     onlyOwner()
+        onlyOperator returns (bool)
     {
          require(minters[msg.sender], "!minter");
-        super.burnFrom(account, amount);
+        return super.burnFrom(account, amount);
     }
 }

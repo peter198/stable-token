@@ -79,7 +79,6 @@ contract Treasury is Ownable {
     mapping (address => uint256) private rElpBlockCoinDayArray;
     // elc amount maparray that user put in pool
     mapping (address => uint256) private elcAmountArray;
-   
     // total rELP  in bankPool
     uint256 private rElpPoolTotal = 0;
      // total rElpCoinDayTotal  in bankPool
