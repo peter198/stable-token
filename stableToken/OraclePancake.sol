@@ -6,10 +6,12 @@ import {FixedPoint} from './libraries/FixedPoint.sol';
 import {SafeMath} from './libraries/SafeMath.sol';
 import {Epoch} from './utils/Epoch.sol';
 
-import {BakerySwapLibrary} from './libraries/BakerySwapLibrary.sol';
-import {BakerySwapOracleLibrary} from './libraries/BakerySwapOracleLibrary.sol';
-import {IBakerySwapPair} from './interfaces/IBakerySwapPair.sol';
-import {IBakerySwapFactory} from './interfaces/IBakerySwapFactory.sol';
+import {PancakeLibrary} from './libraries/PancakeLibrary.sol';
+import {PancakeOracleLibrary} from './libraries/PancakeOracleLibrary.sol';
+
+import {IPancakePair} from './interfaces/IPancakePair.sol';
+
+import {IPancakeFactory} from './interfaces/IPancakeFactory.sol';
 
 interface IOracle {
     function update() external;
@@ -31,7 +33,7 @@ contract Oracle is Epoch {
     // uniswap
     address public token0;
     address public token1;
-    IBakerySwapPair public pair;
+    IPancakePair public pair;
 
     // oracle
     uint32 public blockTimestampLast;
@@ -47,7 +49,7 @@ contract Oracle is Epoch {
         uint256 _startTime
     ) Epoch(_period, _startTime, 0) {
        
-        pair = IBakerySwapPair(swapPair);
+        pair = IPancakePair(swapPair);
         token0 = pair.token0();
         token1 = pair.token1();
         price0CumulativeLast = pair.price0CumulativeLast(); // fetch the current accumulated price value (1 / 0)
@@ -66,7 +68,7 @@ contract Oracle is Epoch {
             uint256 price0Cumulative,
             uint256 price1Cumulative,
             uint32 blockTimestamp
-        ) = BakerySwapOracleLibrary.currentCumulativePrices(address(pair));
+        ) = PancakeOracleLibrary.currentCumulativePrices(address(pair));
         uint32 timeElapsed = blockTimestamp - blockTimestampLast; // overflow is desired
 
         if (timeElapsed == 0) {
@@ -114,7 +116,7 @@ contract Oracle is Epoch {
             uint256 price0Cumulative,
             uint256 price1Cumulative,
             uint32 blockTimestamp
-        ) = BakerySwapOracleLibrary.currentCumulativePrices(address(pair));
+        ) = PancakeOracleLibrary.currentCumulativePrices(address(pair));
         uint32 timeElapsed = blockTimestamp - blockTimestampLast; // overflow is desired
 
         FixedPoint.uq112x112 memory avg0 =
@@ -140,7 +142,7 @@ contract Oracle is Epoch {
         address tokenA,
         address tokenB
     ) external pure returns (address lpt) {
-        return BakerySwapLibrary.pairFor(factory, tokenA, tokenB);
+        return PancakeLibrary.pairFor(factory, tokenA, tokenB);
     }
 
     event Updated(uint256 price0CumulativeLast, uint256 price1CumulativeLast);

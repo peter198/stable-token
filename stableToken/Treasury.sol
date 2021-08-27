@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.6.0 <0.8.5;
-import "./libraries/Ownable.sol";
+import "./utils/Ownable.sol";
 import "./interfaces/IERC20.sol";
 import "./libraries/Address.sol";
 import "./libraries/SafeMath.sol";
@@ -10,6 +10,7 @@ import {IOracle} from './Oracle.sol';
 import {BakerySwapLibrary} from './libraries/BakerySwapLibrary.sol';
 import {IBakerySwapPair} from './interfaces/IBakerySwapPair.sol';
 import "./libraries/UniswapV2LiquidityMathLibrary.sol";
+import {Epoch} from './utils/Epoch.sol';
 
 contract Treasury is Ownable {
     using SafeMath for uint256;
@@ -67,7 +68,6 @@ contract Treasury is Ownable {
       uint256 totalCoinDay;
       uint256 expandBlockNo;
       uint256 totalExpandElc;
-      uint256 elcPerCoinDay;
     }
     expandRec[] private  _expandHisRec;
     // reward rate sturct 
@@ -121,7 +121,8 @@ contract Treasury is Ownable {
     }
     // voter Map 
     mapping(address => voteInfo) private _voterMap;
-    //----------------event--------------------//
+   
+    /* =================== Event =================== */
     event AddELP (address user,uint256 elp_amount,uint256 relp_amount,uint256 elc_amount);
     event WithdrawELP(address user, uint256 relp_amount,uint256 elc_amount,uint256 elp_amount);
     event ExpandCycle (uint256 blockno,uint256 elc_amount);
@@ -135,7 +136,8 @@ contract Treasury is Ownable {
     event withdrawELCevent(address user,uint256 amount);
     event withdrawRelpevent(address user,uint256 amount);
     event withdrawElpevent(address user,uint256 amount); 
-    //----------------modifier--------------------//
+    
+    /* =================== Modifier =================== */
     // update elcaim price by K Factor.
     modifier updateElcAim(){
        votingResult();  
@@ -186,10 +188,10 @@ contract Treasury is Ownable {
         uint256 rewardTmp = rewardELP();
         // must prepare enough elp amounts for staker rewards,
         if(_reserveGlobal.elpRewardAmount >= rewardTmp){
-            _relpUserArray[_msgSender()].elpRewards += rewardTmp; 
+            _relpUserArray[msg.sender].elpRewards += rewardTmp; 
             _reserveGlobal.elpRewardAmount -= rewardTmp;
           }        
-          _relpUserArray[_msgSender()].elpRewardPerCoinPaid = _rewardElpPerCoinStored;
+          _relpUserArray[msg.sender].elpRewardPerCoinPaid = _rewardElpPerCoinStored;
           _rewardParm.elpRewardRatePerBlock = caculateRate( block.number); 
           _rewardParm.elpRewardRateChgBlock = block.number;
         _;
@@ -198,13 +200,19 @@ contract Treasury is Ownable {
     modifier getExpandElc(){
         (uint256 expandElcAmount,  uint256 CoinDay, uint256 UpdateTime ,  
                                          uint256 LastTimeExpand) =  computeExpandElcBelongMe();
-         _relpUserArray[_msgSender()].rElpLastUpdateTime = UpdateTime;
-         _relpUserArray[_msgSender()].lastTimeExpandRewordforUser = LastTimeExpand;
-         _relpUserArray[_msgSender()].rElpBlockCoinDay = CoinDay;
-        _relpUserArray[_msgSender()].elcAmount += expandElcAmount;
+         _relpUserArray[msg.sender].rElpLastUpdateTime = UpdateTime;
+         _relpUserArray[msg.sender].lastTimeExpandRewordforUser = LastTimeExpand;
+         _relpUserArray[msg.sender].rElpBlockCoinDay = CoinDay;
+        _relpUserArray[msg.sender].elcAmount += expandElcAmount;
         _;
     }
-    //----------------function--------------------//
+    // oracle update price
+    modifier updatePrice {
+        updateCashPrice();
+        _;
+    }
+   
+    /* ========== MUTABLE FUNCTIONS ========== */
     constructor(address elpContract, 
                 address elcContract,
                 address relpContract,
@@ -242,14 +250,17 @@ contract Treasury is Ownable {
     }
     // get a day avarage price of elp 
     function getOraclePrice(address oracleAdr,address token) public view returns (uint256) {
-       try IOracle(oracleAdr).consult(token, 1e18) returns (uint256 price) {
+        try IOracle(oracleAdr).consult(token, 1e18) returns (uint256 price) {
             return price;
         } catch {
             revert('Treasury: failed to consult elp price from the oracle');
         }
     }
     // set swap address
-    function setSwap(address elcUsdtPair, address elpUsdtPair, address elcOracleAddr,  address elpOracleAddr) external onlyOwner {
+    function setSwap(address elcUsdtPair, 
+                     address elpUsdtPair, 
+                     address elcOracleAddr,  
+                     address elpOracleAddr) external onlyOwner {
         _elcSwap = IBakerySwapPair(elcUsdtPair);
         _elpSwap = IBakerySwapPair(elpUsdtPair);
         _elcOracle = elcOracleAddr;
@@ -258,34 +269,34 @@ contract Treasury is Ownable {
     // add ELP liquidity，for Risk Reserve 
     function addRiskReserveElp(uint256 elpAmount) external onlyOwner returns(bool ret){
         require(elpAmount > 0, "elp amount must > 0");
-        ret = elp.transferFrom(_msgSender(), address(this), elpAmount);
+        ret = addElp( elpAmount);
         require(ret == true, "addRiskReserveElp:transferFrom msgSender to this must succ");
         _reserveGlobal.elpRiskReserve =  _reserveGlobal.elpRiskReserve.add(elpAmount);
-        emit AddRiskELP(_msgSender(), elpAmount); 
+        emit AddRiskELP(msg.sender, elpAmount); 
     }
     // add ELP liquidity，for Rewards 
     function addRewardsElp(uint256 elpAmount) external onlyOwner  returns(bool ret){
         require(elpAmount > 0, "elp amount must > 0");
         require(_reserveGlobal.elpRewardAmount.add(elpAmount) < _elpRewardTotal, "reward elp amount must < totalreward");
-        ret = elp.transferFrom(_msgSender(), address(this), elpAmount);
-        require(ret == true,"addRewardsElp:transferFrom _msgSender() to this  must succ");
+        ret = addElp( elpAmount);
+        require(ret == true,"addRewardsElp:transferFrom msg.sender to this  must succ");
         _reserveGlobal.elpRewardAmount= _reserveGlobal.elpRewardAmount.add(elpAmount);
-        emit AddRewardsELP(_msgSender(), elpAmount); 
+        emit AddRewardsELP(msg.sender, elpAmount); 
     }
     // add ELP liquidity to system
-    function addReserveElp(uint256 elpAmount) internal  returns(bool ret){
+    function addElp(uint256 elpAmount) internal  returns(bool ret){
         require(elpAmount > 0, "elp amount must > 0");
-         ret = elp.transferFrom(_msgSender(), address(this), elpAmount);
-        require(ret == true,"addReserveElp:transferFrom _msgSender() to this  must succ");
+        ret = elp.transferFrom(msg.sender, address(this), elpAmount);
+        require(ret == true,"addReserveElp:transferFrom msg.sender to this  must succ");
         _reserveGlobal.elpReserveAmount =  _reserveGlobal.elpReserveAmount.add(elpAmount); 
-        emit AddReserveELP(_msgSender(), elpAmount);
+        emit AddReserveELP(msg.sender, elpAmount);
     }
     // get total reward amount 
     function getTotalRewardsElpAmount() external  view returns(uint256){
         return _reserveGlobal.elpRewardAmount;
     }
     // add ELP liquidity，returns rELP amount and ELC amount
-    function addElp(uint256 elpAmount) external updateRewardELP getExpandElc returns(uint256  , uint256 ) {
+    function addReserveElp(uint256 elpAmount) external updatePrice updateRewardELP getExpandElc  returns(uint256  , uint256 ) {
         require(elpAmount > 0, "elp amount must > 0");
         (uint256 relpAmount,uint256 elcAmount) = computeRelpElcbyAddELP(elpAmount);
         if (relpAmount == 0) {
@@ -293,61 +304,60 @@ contract Treasury is Ownable {
         }
         bool ret ;
         if (elcAmount > 0) {
-           ret = elc.mint(_msgSender(), elcAmount);
+           ret = elc.mint(msg.sender, elcAmount);
            require(ret  == true, "addElp:elc.mint must return true");
         }
         
         ret = rElp.mint(address(this), relpAmount);
         require(ret  == true, "addElp:rElp.mint must return true");
         // new relp user
-        if(_relpUserArray[_msgSender()].rElpAmount == 0){
-             _relpUserArray[_msgSender()].lastTimeExpandRewordforUser =  block.number;
+        if(_relpUserArray[msg.sender].rElpAmount == 0){
+             _relpUserArray[msg.sender].lastTimeExpandRewordforUser =  block.number;
         }
         
         // compute new coinday should add 
-        uint256 newCoinDay = _relpUserArray[_msgSender()].rElpAmount.mul( (block.number
-                             .sub(_relpUserArray[_msgSender()].rElpLastUpdateTime)).div(_adjustGap) ) ;
-        _relpUserArray[_msgSender()].rElpBlockCoinDay = _relpUserArray[_msgSender()].rElpBlockCoinDay.add( newCoinDay );
+        uint256 newCoinDay = _relpUserArray[msg.sender].rElpAmount.mul( (block.number
+                             .sub(_relpUserArray[msg.sender].rElpLastUpdateTime)).div(_adjustGap) ) ;
+        _relpUserArray[msg.sender].rElpBlockCoinDay = _relpUserArray[msg.sender].rElpBlockCoinDay.add( newCoinDay );
         _rElpTotalParm.rElpCoinDayTotal += newCoinDay;
 
-        _relpUserArray[_msgSender()].rElpAmount = _relpUserArray[_msgSender()].rElpAmount.add(relpAmount);
-        _relpUserArray[_msgSender()].rElpLastUpdateTime =  block.number;
+        _relpUserArray[msg.sender].rElpAmount = _relpUserArray[msg.sender].rElpAmount.add(relpAmount);
+        _relpUserArray[msg.sender].rElpLastUpdateTime =  block.number;
         _rElpTotalParm.rElpPoolTotal += relpAmount;
         _rElpTotalParm.relpTotalLastUpdateTime =  block.number;
          
-        ret = addReserveElp(elpAmount);
+        ret = addElp(elpAmount);
         require(ret == true, "addElp: addReserveElp must succ"); 
-        emit AddELP(_msgSender(), elpAmount, relpAmount, elcAmount);
+        emit AddELP(msg.sender, elpAmount, relpAmount, elcAmount);
         return (relpAmount, elcAmount);
     }
     // withdraw elp，
-    function withdrawElp(uint256 elpAmount) external updateRewardELP getExpandElc lrLess90 returns(bool) {
+    function withdrawElp(uint256 elpAmount) external updateRewardELP getExpandElc updatePrice lrLess90  returns(bool) {
         require(elpAmount > 0, 'WithdrawElp: elpAmount must > 0 ');
-        require(checkProposaler(_msgSender()) == false,"withdrawRELP:msgSender must not an proposal in _voteDuration!");
+        require(checkProposaler(msg.sender) == false,"withdrawRELP:msgSender must not an proposal in _voteDuration!");
         bool ret = false;
-        if(elpAmount < _relpUserArray[_msgSender()].elpRewards)
+        if(elpAmount < _relpUserArray[msg.sender].elpRewards)
         {
-            _relpUserArray[_msgSender()].elpRewards =  _relpUserArray[_msgSender()].elpRewards.sub(elpAmount);
-            ret = elp.transfer(_msgSender(), elpAmount);
+            _relpUserArray[msg.sender].elpRewards =  _relpUserArray[msg.sender].elpRewards.sub(elpAmount);
+            ret = elp.transfer(msg.sender, elpAmount);
             require(ret == true,"withdrawElp:elp.transfer must succ !");
             return ret;
         }
-        uint256 tmpElpNeed = elpAmount.sub(_relpUserArray[_msgSender()].elpRewards);
+        uint256 tmpElpNeed = elpAmount.sub(_relpUserArray[msg.sender].elpRewards);
         (uint256 relpNeed ,uint256 elcNeed) = computeRelpElcbyWithdrawELP(tmpElpNeed);
-        require(( elc.balanceOf(_msgSender()) >= elcNeed)  && (_relpUserArray[_msgSender()].rElpAmount  >= relpNeed),
+        require(( elc.balanceOf(msg.sender) >= elcNeed)  && (_relpUserArray[msg.sender].rElpAmount  >= relpNeed),
                   "withdrawElp:must have enough elc and relp!");
               
-        elc.burnFrom(_msgSender(), elcNeed);
+        elc.burnFrom(msg.sender, elcNeed);
         rElp.burn(relpNeed);
-
         // compute new coinday should add 
-        uint256 newCoinDay = _relpUserArray[_msgSender()].rElpAmount
-                            .mul( (block.number.sub(_relpUserArray[_msgSender()].rElpLastUpdateTime) ).div(_adjustGap) ) ;
-        if(_relpUserArray[_msgSender()].rElpAmount == relpNeed)
+        uint256 newCoinDay = _relpUserArray[msg.sender].rElpAmount
+                            .mul( (block.number.sub(_relpUserArray[msg.sender].rElpLastUpdateTime) ).div(_adjustGap) ) ;
+        if(_relpUserArray[msg.sender].rElpAmount == relpNeed)
         {
-             _relpUserArray[_msgSender()].rElpBlockCoinDay = 0;
+             _relpUserArray[msg.sender].rElpBlockCoinDay = 0;
         }else{
-              _relpUserArray[_msgSender()].rElpBlockCoinDay = _relpUserArray[_msgSender()].rElpBlockCoinDay
+              _relpUserArray[msg.sender].rElpBlockCoinDay = _relpUserArray[msg.sender].rElpBlockCoinDay
                   .add( newCoinDay );
         }
         if( _rElpTotalParm.rElpPoolTotal == relpNeed)
@@ -355,47 +365,41 @@ contract Treasury is Ownable {
              _rElpTotalParm.rElpCoinDayTotal = 0;
         }else{
             _rElpTotalParm.rElpCoinDayTotal += newCoinDay; 
-        }
-       
-        _relpUserArray[_msgSender()].rElpLastUpdateTime = block.number;
-        _relpUserArray[_msgSender()].rElpAmount = _relpUserArray[_msgSender()].rElpAmount.sub(relpNeed);
-        _relpUserArray[_msgSender()].elpRewards = 0;
+        } 
+        _relpUserArray[msg.sender].rElpLastUpdateTime = block.number;
+        _relpUserArray[msg.sender].rElpAmount = _relpUserArray[msg.sender].rElpAmount.sub(relpNeed);
+        _relpUserArray[msg.sender].elpRewards = 0;
         
         _rElpTotalParm.rElpPoolTotal = _rElpTotalParm.rElpPoolTotal.sub(relpNeed);
         _rElpTotalParm.relpTotalLastUpdateTime =  block.number;
         
-        ret = elp.transfer(_msgSender(), elpAmount);
+        ret = elp.transfer(msg.sender, elpAmount);
         require(ret == true,"withdrawElp:elp.transfer must succ !");
         _reserveGlobal.elpReserveAmount =  _reserveGlobal.elpReserveAmount.sub(tmpElpNeed); 
-        emit withdrawElpevent(_msgSender(),elpAmount); 
+        emit withdrawElpevent(msg.sender,elpAmount); 
         return ret;
     }
-    
     // withdraw elc
     function withdrawElc(uint256 elcAmount) external  returns(bool){
-        require(elcAmount <= _relpUserArray[_msgSender()].elcAmount,"withdrawElc:elcAmount <= _relpUserArray[_msgSender()].elcAmount");
-        _relpUserArray[_msgSender()].elcAmount = _relpUserArray[_msgSender()].elcAmount.sub(elcAmount); 
-        bool ret = elc.transfer(_msgSender(), elcAmount);
+        require(elcAmount <= _relpUserArray[msg.sender].elcAmount,"withdrawElc:elcAmount <= _relpUserArray[msg.sender].elcAmount");
+        _relpUserArray[msg.sender].elcAmount = _relpUserArray[msg.sender].elcAmount.sub(elcAmount); 
+        bool ret = elc.transfer(msg.sender, elcAmount);
         require(ret == true ,"withdrawElc:trasfer from this to user msust succ");
-        emit withdrawELCevent(_msgSender(), elcAmount); 
+        emit withdrawELCevent(msg.sender, elcAmount); 
         return ret;
-    }
-    // get the amount of elc belone to _msgSender()
-    function getElcAmount() external view returns (uint256){
-        return _relpUserArray[_msgSender()].elcAmount;
     }
     // user withdraw rELP and send it to user address
     function withdrawRELP(uint256 relpAmount)  external updateRewardELP getExpandElc returns(bool){
-        require(relpAmount <= _relpUserArray[_msgSender()].rElpAmount,"withdrawRELP:withdraw amount must < rElpAmount hold!");
-        require(checkProposaler(_msgSender()) == false,"withdrawRELP:msgSender must not an proposal in _voteDuration!");
+        require(relpAmount <= _relpUserArray[msg.sender].rElpAmount,"withdrawRELP:withdraw amount must < rElpAmount hold!");
+        require(checkProposaler(msg.sender) == false,"withdrawRELP:msgSender must not an proposal in _voteDuration!");
         // compute new coinday should add 
-        uint256 newCoinDay = _relpUserArray[_msgSender()].rElpAmount
-                           .mul( (block.number.sub(_relpUserArray[_msgSender()].rElpLastUpdateTime) ).div(_adjustGap) ) ;
-        if(_relpUserArray[_msgSender()].rElpAmount == relpAmount)
+        uint256 newCoinDay = _relpUserArray[msg.sender].rElpAmount
+                           .mul( (block.number.sub(_relpUserArray[msg.sender].rElpLastUpdateTime) ).div(_adjustGap) ) ;
+        if(_relpUserArray[msg.sender].rElpAmount == relpAmount)
         {
-             _relpUserArray[_msgSender()].rElpBlockCoinDay = 0;
+             _relpUserArray[msg.sender].rElpBlockCoinDay = 0;
         }else{
-             _relpUserArray[_msgSender()].rElpBlockCoinDay = _relpUserArray[_msgSender()].rElpBlockCoinDay
+             _relpUserArray[msg.sender].rElpBlockCoinDay = _relpUserArray[msg.sender].rElpBlockCoinDay
                   .add( newCoinDay );
         }
         if( _rElpTotalParm.rElpPoolTotal == relpAmount)
@@ -405,52 +409,43 @@ contract Treasury is Ownable {
             _rElpTotalParm.rElpCoinDayTotal += newCoinDay; 
         }
        
-        _relpUserArray[_msgSender()].rElpLastUpdateTime = block.number;
-        _relpUserArray[_msgSender()].rElpAmount =  _relpUserArray[_msgSender()].rElpAmount.sub(relpAmount);
+        _relpUserArray[msg.sender].rElpLastUpdateTime = block.number;
+        _relpUserArray[msg.sender].rElpAmount =  _relpUserArray[msg.sender].rElpAmount.sub(relpAmount);
         
         _rElpTotalParm.rElpPoolTotal = _rElpTotalParm.rElpPoolTotal.sub(relpAmount);
         _rElpTotalParm.relpTotalLastUpdateTime =  block.number;
        
-        bool ret = rElp.transfer(_msgSender(), relpAmount);
+        bool ret = rElp.transfer(msg.sender, relpAmount);
         require(ret == true,"withdrawRELP:rElp.transfer must succ");
-        emit withdrawRelpevent(_msgSender(), relpAmount); 
+        emit withdrawRelpevent(msg.sender, relpAmount); 
         return ret;
     }
     // user add rELP to pool, liquidity miner
     function addRELP(uint256 relpAmount) external updateRewardELP getExpandElc returns(bool ){
         require(relpAmount > 0,"addRELP:relpAmount >0 ");
         // compute new coinday shuld add 
-        uint256 newCoinDay = _relpUserArray[_msgSender()].rElpAmount
-                          .mul( (block.number.sub(_relpUserArray[_msgSender()].rElpLastUpdateTime) ).div(_adjustGap) ) ;
-        _relpUserArray[_msgSender()].rElpBlockCoinDay = _relpUserArray[_msgSender()].rElpBlockCoinDay
+        uint256 newCoinDay = _relpUserArray[msg.sender].rElpAmount
+                          .mul( (block.number.sub(_relpUserArray[msg.sender].rElpLastUpdateTime) ).div(_adjustGap) ) ;
+        _relpUserArray[msg.sender].rElpBlockCoinDay = _relpUserArray[msg.sender].rElpBlockCoinDay
                   .add( newCoinDay );
         _rElpTotalParm.rElpCoinDayTotal += newCoinDay;
-     
-        _relpUserArray[_msgSender()].rElpAmount = _relpUserArray[_msgSender()].rElpAmount.add(relpAmount);
-        _relpUserArray[_msgSender()].rElpLastUpdateTime = block.number;
-       
+        _relpUserArray[msg.sender].rElpAmount = _relpUserArray[msg.sender].rElpAmount.add(relpAmount);
+        _relpUserArray[msg.sender].rElpLastUpdateTime = block.number;
         _rElpTotalParm.rElpPoolTotal += relpAmount;
         _rElpTotalParm.relpTotalLastUpdateTime =  block.number;
-        bool ret = rElp.transferFrom(_msgSender(), address(this), relpAmount);
+        bool ret = rElp.transferFrom(msg.sender, address(this), relpAmount);
         require(ret == true,"addRELP:rElp.transfer to this must succ");
-        emit AddRelpEvent(_msgSender(), relpAmount); 
+        emit AddRelpEvent(msg.sender, relpAmount); 
         return ret;
     }
-    // get the _msgSender()'s relp amounts
-    function getRelpAmount() external view returns (uint256){
-       return _relpUserArray[_msgSender()].rElpAmount;
-    }
-    // for debugging use ,getblance of this contract's relp
-    function getRElpPoolTotalAmount() external view onlyOwner returns (uint256){
-       return _rElpTotalParm.rElpPoolTotal;
-    }
-    // for debugging use ,getblance of this contract's elp
-    function getElpPoolTotalAmount() external view onlyOwner returns (uint256){
-       return (_reserveGlobal.elpReserveAmount + _reserveGlobal.elpRiskReserve + _reserveGlobal.elpRewardAmount);
-    }
-    // for debugging use ,getblance of this contract's elc
-    function getElcPoolTotalAmount() external view onlyOwner returns (uint256){
-       return elc.balanceOf(address(this));
+    // update oracle token price
+    function updateCashPrice() internal {
+        if (Epoch(_elcOracle).callable()) {
+            try IOracle(_elcOracle).update() {} catch {}
+        }       
+        if (Epoch(_elpOracle).callable()) {
+            try IOracle(_elpOracle).update() {} catch {}
+        }
     }
     // swap token, for expansion and contraction
     function swapToken(bool elcBuyElpTag, uint256 amountIn) public returns (uint256){
@@ -471,8 +466,7 @@ contract Treasury is Ownable {
             amounts = BakerySwapLibrary.getAmountsOut(_elpSwap.factory(),amountIn, path1);
             TransferHelper.safeTransfer(address(elp),address(_elpSwap),amountIn); 
         }    
-        for (uint256 i = 0; i < path1.length - 1; i++) 
-        {
+        for (uint256 i = 0; i < path1.length - 1; i++) {
             (address input, address output) = (path1[i], path1[i + 1]);
             (address token0, ) = BakerySwapLibrary.sortTokens(input, output);
             uint256 amountOut = amounts[i + 1];
@@ -484,13 +478,12 @@ contract Treasury is Ownable {
         }
         return amounts[amounts.length -1];
     }
-    // compute elc amount belong to _msgSender() while expand
+    // compute elc amount belong to msg.sender while expand
     function computeExpandElcBelongMe() public view returns(uint256, uint256 ,uint256, uint256){
-        uint256 tempLastUpdateTime = _relpUserArray[_msgSender()].rElpLastUpdateTime;
-        uint256 tempBlockCoinDay = _relpUserArray[_msgSender()].rElpBlockCoinDay;
-        uint256 tempLastTimeExpandRewordforUser = _relpUserArray[_msgSender()].lastTimeExpandRewordforUser;
+        uint256 tempLastUpdateTime = _relpUserArray[msg.sender].rElpLastUpdateTime;
+        uint256 tempBlockCoinDay = _relpUserArray[msg.sender].rElpBlockCoinDay;
+        uint256 tempLastTimeExpandRewordforUser = _relpUserArray[msg.sender].lastTimeExpandRewordforUser;
         uint256 expandElcAmount= 0;
-       
         for(uint256 i = 0; i < _expandHisRec.length; i++)
         {
             uint caculateTime = _expandHisRec[i].expandBlockNo;
@@ -498,17 +491,17 @@ contract Treasury is Ownable {
             {
                continue;
             }
-            
-            tempBlockCoinDay  +=  _relpUserArray[_msgSender()].rElpAmount.mul( ( caculateTime.sub(tempLastUpdateTime) ).div(_adjustGap) );
-            expandElcAmount += tempBlockCoinDay.mul(_expandHisRec[i].elcPerCoinDay);
+            tempBlockCoinDay  +=  _relpUserArray[msg.sender].rElpAmount.mul( ( caculateTime.sub(tempLastUpdateTime) ).div(_adjustGap) );
+            expandElcAmount += FullMath.mulDiv(tempBlockCoinDay, _expandHisRec[i].totalExpandElc, _expandHisRec[i].totalCoinDay);
             tempBlockCoinDay = 0;
             tempLastUpdateTime = caculateTime;
             tempLastTimeExpandRewordforUser = caculateTime;
         }
         return ( expandElcAmount, tempBlockCoinDay, tempLastUpdateTime , tempLastTimeExpandRewordforUser);
     }
+    
     // expand cycle. raise ELC, swap ELC to ELP
-    function expansion() external updateElcAim lrLess70 elcPriceOverUplimit expandInOneDayAg returns(uint256) {
+    function expansion() external updatePrice updateElcAim lrLess70 elcPriceOverUplimit expandInOneDayAg  returns(uint256) {
         _lastExpandTime = block.number;
         uint256 elcSellAmount = expansionComputeElc();
         uint256 elpAmount = 0;
@@ -519,8 +512,7 @@ contract Treasury is Ownable {
         } else {
            uint256 mintAmount = 0;
            uint256 temp =  _reserveGlobal.elcRiskReserve;
-           if( _reserveGlobal.elcRiskReserve > 0)
-           {
+           if( _reserveGlobal.elcRiskReserve > 0){
                _reserveGlobal.elcRiskReserve = 0;
                elpAmount = swapToken(true,temp);
                _reserveGlobal.elpRiskReserve += elpAmount;
@@ -528,16 +520,13 @@ contract Treasury is Ownable {
            } else  if( _reserveGlobal.elcRiskReserve == 0){
                mintAmount = elcSellAmount;
            }
-           
            require(elc.mint(address(this), mintAmount),"expansion:elc.mint fun must succ!");
            elpAmount = swapToken(true,mintAmount.mul(5).div(100));
            _reserveGlobal.elpRiskReserve += elpAmount;
            _rElpTotalParm.rElpCoinDayTotal += _rElpTotalParm.rElpPoolTotal
-                                    .mul(  ( (block.number).sub(_rElpTotalParm.relpTotalLastUpdateTime) ).div(_adjustGap) );
-           uint256  expandElcforRelp = mintAmount.sub(mintAmount.mul(5).div(100));
-           _expandHisRec.push(expandRec(_rElpTotalParm.rElpCoinDayTotal,block.number,expandElcforRelp
-                                                  ,expandElcforRelp.div(_rElpTotalParm.rElpCoinDayTotal)));
-          
+                          .mul(  ( (block.number).sub(_rElpTotalParm.relpTotalLastUpdateTime) ).div(_adjustGap) );          
+           uint256  expandElcforRelp = FullMath.mulDiv(mintAmount,95,100);
+           _expandHisRec.push(expandRec(_rElpTotalParm.rElpCoinDayTotal,block.number,expandElcforRelp));
            _rElpTotalParm.rElpCoinDayTotal = 0;
            _rElpTotalParm.relpTotalLastUpdateTime = block.number;
         }
@@ -545,7 +534,7 @@ contract Treasury is Ownable {
         return elcSellAmount;
     }
     // contract cycle. swap ELP to ELC
-    function contraction() external  elcPriceOverDownlimit contractInOneDayAg  updateElcAim returns(uint256) {
+    function contraction() external updatePrice elcPriceOverDownlimit contractInOneDayAg  updateElcAim  returns(uint256) {
         uint256 elcAmount = 0;
         uint256 elpNeedSell = contractionComputeElpNeed();
         _lastContractTime = block.number;
@@ -570,6 +559,28 @@ contract Treasury is Ownable {
         }
        emit ContractCycle(block.number, elpNeedSell);
        return elpNeedSell; 
+    }
+    
+    /* ========== VIEW FUNCTIONS ========== */
+    // get the amount of elc belone to msg.sender
+    function getElcAmount() external view returns (uint256){
+        return _relpUserArray[msg.sender].elcAmount;
+    }
+    // get the msg.sender's relp amounts
+    function getRelpAmount() external view returns (uint256){
+       return _relpUserArray[msg.sender].rElpAmount;
+    }
+    // for debugging use ,getblance of this contract's relp
+    function getRElpPoolTotalAmount() external view onlyOwner returns (uint256){
+       return _rElpTotalParm.rElpPoolTotal;
+    }
+    // for debugging use ,getblance of this contract's elp
+    function getElpPoolTotalAmount() external view onlyOwner returns (uint256){
+       return (_reserveGlobal.elpReserveAmount + _reserveGlobal.elpRiskReserve + _reserveGlobal.elpRewardAmount);
+    }
+    // for debugging use ,getblance of this contract's elc
+    function getElcPoolTotalAmount() external view onlyOwner returns (uint256){
+       return elc.balanceOf(address(this));
     }
     // compute the ELP amount get rELP amount and ELC amount
     function computeRelpElcbyAddELP(uint256  elpAmount) public view returns(uint256 , uint256 ) {
@@ -601,8 +612,7 @@ contract Treasury is Ownable {
         uint256 elcAmount = 0;
         uint256  lr = liabilityRatio();
         uint256   relpPrice = computeRelpPrice();  
-        if(lr < 90)
-        {
+        if(lr < 90){
            relpAmount =  FullMath.mulDiv( elpPrice,elpAmount.mul(100 -lr),relpPrice.mul(100) );
            elcAmount =  FullMath.mulDiv( elpPrice,elpAmount.mul(lr),elcPrice.mul(100) );  
         }
@@ -611,8 +621,7 @@ contract Treasury is Ownable {
     // get the aimPrice at nearst blocktime
     function getAimPrice() public view returns(uint256){
        uint256 tempElcAim = _elcAimParm.elcAim; 
-       if((block.number).sub(_elcAimParm.elcaimLastBlock) >= _durationBlock)
-       {
+       if((block.number).sub(_elcAimParm.elcaimLastBlock) >= _durationBlock){
            tempElcAim =  caculateElcAim();
        }
        return tempElcAim;
@@ -631,14 +640,12 @@ contract Treasury is Ownable {
         }else{
             reserveUSDT = reserve0;
             reserveELC = reserve1;
-        }
-         
+        }         
         (bool usdtToELC, uint256 usdtNeed) = UniswapV2LiquidityMathLibrary.computeProfitMaximizingTrade(
                 1E18, _elcAimParm.elcAim.mul(98).div(100),reserveUSDT, reserveELC);
         if (usdtNeed == 0 || usdtToELC == false) {
             return 0;
         }
-
         uint256 reserveELP = 0;
         uint256 reserveUSDT2 = 0;
         (reserve0, reserve1, ) = _elpSwap.getReserves();
@@ -649,16 +656,16 @@ contract Treasury is Ownable {
         }else{
             reserveUSDT2 = reserve0;
             reserveELP = reserve1;
-        }
-        
+        }        
         if(usdtNeed > reserveUSDT2){
               return 0;
-        }
-        
+        }       
         return BakerySwapLibrary.getAmountIn(usdtNeed, reserveELP, reserveUSDT2);
     }
     // compute the selling elc amount, the buying elp amounts the betwixt usdt amount while expansion
     function expansionComputeElc() public view returns(uint256) {
+       uint256  elcPrice = getOraclePrice(_elcOracle,address(elc));
+       require(elcPrice > _elcAimParm.elcAim.mul(102).div(100),"contractionComputeElpAndElc: true price large than aim 102%");
         (uint256 reserve0, uint256 reserve1,) = _elcSwap.getReserves();
         uint256 reserveUSDT;
         uint256 reserveELC;
@@ -670,7 +677,7 @@ contract Treasury is Ownable {
             reserveELC = reserve1;
         }
         (bool elcToUsdt, uint256 elcNeed) = UniswapV2LiquidityMathLibrary.computeProfitMaximizingTrade(
-                _elcAimParm.elcAim,1E18, reserveELC, reserveUSDT);
+               1E18, _elcAimParm.elcAim, reserveELC, reserveUSDT);
          if(elcToUsdt){
              return elcNeed;
          }
@@ -703,8 +710,7 @@ contract Treasury is Ownable {
         }
         (uint256 elpl, uint256 elph) = FullMath.fullMul(_reserveGlobal.elpReserveAmount, elpPrice);
         (uint256 elcl, uint256 elch) =  FullMath.fullMul(elcTotal, elcPrice); 
-        if((elph > elch) || ( (elph == elch) && (elpl > elcl) ) )
-        {
+        if((elph > elch) || ( (elph == elch) && (elpl > elcl) ) ){
             uint256 relpPrice =  FullMath.mulDiv( _reserveGlobal.elpReserveAmount,elpPrice,relpTotal );
             relpPrice = relpPrice.sub( FullMath.mulDiv( elcTotal,elcPrice,relpTotal) );
             return relpPrice;  
@@ -732,11 +738,9 @@ contract Treasury is Ownable {
         uint256  elp_price  = getOraclePrice(_elpOracle,address(elp));
         uint256 elc_total = elc.totalSupply();
         
-        if(elp_price > 0 &&  _reserveGlobal.elpReserveAmount > 0)
-        {
+        if(elp_price > 0 &&  _reserveGlobal.elpReserveAmount > 0){
             lr = ( FullMath.mulDiv(elc_total.mul(100), elc_price,elp_price) ).div( _reserveGlobal.elpReserveAmount);
-        }
-        
+        }       
         if (lr >= 100) {
             // up bound is 100
             return 100;
@@ -752,7 +756,6 @@ contract Treasury is Ownable {
         if (_rElpTotalParm.rElpPoolTotal == 0){
             return _rewardElpPerCoinStored;
         }
-        
        return _rewardElpPerCoinStored.add(
                     (block.number - _rElpTotalParm.relpTotalLastUpdateTime)
                     .mul(tmpRatePerBlock)
@@ -808,10 +811,10 @@ contract Treasury is Ownable {
     }
     // caculate rElp rewards
     function rewardELP() public view returns (uint256) {
-        return _relpUserArray[_msgSender()].rElpAmount
-                .mul(getElpRewardPerCoin().sub(_relpUserArray[_msgSender()].elpRewardPerCoinPaid))
+        return _relpUserArray[msg.sender].rElpAmount
+                .mul(getElpRewardPerCoin().sub(_relpUserArray[msg.sender].elpRewardPerCoinPaid))
                 .div(1e18)
-                .add(_relpUserArray[_msgSender()].elpRewards);
+                .add(_relpUserArray[msg.sender].elpRewards);
     }
     // caculate elc aim price
     function caculateElcAim() public view returns(uint256){
@@ -820,8 +823,7 @@ contract Treasury is Ownable {
         uint256 tempDiv = 1;
         uint256 temp = 10;
         while(span > 0){
-           if(span > temp)  
-           {
+           if(span > temp){
                 tempK = tempK.mul( (100000 +_elcAimParm.k)**9 );
                 tempDiv = tempDiv.mul(100000 ** 9);
                 tempK = tempK.div(tempDiv);
@@ -835,32 +837,32 @@ contract Treasury is Ownable {
         }
         return _elcAimParm.elcAim.mul(tempK).div(tempDiv);
     }
-  
-    //-------------------------------------k vote ------------------------//      
+    
+    /* ==========K VOTE FUNCTIONS ========== */
     // proposal k factor
     function proposal(uint256 detaK) external returns (bool) {
        require(detaK > 0,"proposal:detaK must > 0");
-       require(_relpUserArray[_msgSender()].rElpAmount >= _voteBaserelpAmount,"proposal:relp hold must > _voteBaserelpAmount");
-       require(_votingParm.bgProposalBlock == 0 || (block.number - _votingParm.bgProposalBlock) < _voteDuration,"proposal:must in _voteDuration or the first propose");
-       require(_votingParm.proposalSender != _msgSender(),"proposal: can't propose twice in _voteDuration");
-       require(_relpUserArray[_votingParm.proposalSender].rElpAmount < _relpUserArray[_msgSender()].rElpAmount,"proposal: new  proposer must have move relp!");
-       
+       require(_relpUserArray[msg.sender].rElpAmount >= _voteBaserelpAmount,"proposal:relp hold must > _voteBaserelpAmount");
+       require(_votingParm.bgProposalBlock == 0 || (block.number - _votingParm.bgProposalBlock) < _voteDuration,
+                                                                 "proposal:must in _voteDuration or the first propose");
+       require(_votingParm.proposalSender != msg.sender,"proposal: can't propose twice in _voteDuration");
+       require(_relpUserArray[_votingParm.proposalSender].rElpAmount < _relpUserArray[msg.sender].rElpAmount,
+                                                                 "proposal: new  proposer must have move relp!");
        _votingParm.proposalK = detaK; 
-       _votingParm.proposalSender = _msgSender();
+       _votingParm.proposalSender = msg.sender;
        _votingParm.against = 0;
        _votingParm.approve = 0;
        _votingParm.turnout = 0;
-       _votingParm.turnout += _relpUserArray[_msgSender()].rElpAmount;
-       _votingParm.approve += _relpUserArray[_msgSender()].rElpAmount;
+       _votingParm.turnout += _relpUserArray[msg.sender].rElpAmount;
+       _votingParm.approve += _relpUserArray[msg.sender].rElpAmount;
        _votingParm.bgProposalBlock = block.number;
-       _voterMap[_msgSender()].vote = true;
-       _voterMap[_msgSender()].blockNo =  block.number;
+       _voterMap[msg.sender].vote = true;
+       _voterMap[msg.sender].blockNo =  block.number;
        return true;
     }
     // get the first proposal 
     function getProposalTaget() external view returns(uint256){
-        if(_votingParm.proposalSender != address(0))
-        {
+        if(_votingParm.proposalSender != address(0)){
             return _votingParm.proposalK;
         }
         return 0;
@@ -870,29 +872,28 @@ contract Treasury is Ownable {
         require(_votingParm.proposalK > 0,"approveVote:proposalK first element must > 0 ");
         require(_votingParm.bgProposalBlock > 0 && block.number.sub(_votingParm.bgProposalBlock) > _voteDuration 
                  && block.number.sub(_votingParm.bgProposalBlock) < _voteDuration.mul(2));
-        if( _voterMap[_msgSender()].vote == true  && block.number.sub(_voterMap[_msgSender()].blockNo) < _voteDuration)
-        {
+        if( _voterMap[msg.sender].vote == true  && block.number.sub(_voterMap[msg.sender].blockNo) < _voteDuration){
             return false; 
         }
-        _votingParm.turnout += _relpUserArray[_msgSender()].rElpAmount;
-        _votingParm.approve += _relpUserArray[_msgSender()].rElpAmount;
-        _voterMap[_msgSender()].vote = true;
-        _voterMap[_msgSender()].blockNo =  block.number;
+        _votingParm.turnout += _relpUserArray[msg.sender].rElpAmount;
+        _votingParm.approve += _relpUserArray[msg.sender].rElpAmount;
+        _voterMap[msg.sender].vote = true;
+        _voterMap[msg.sender].blockNo =  block.number;
         return true;
     }
     // withdraw proposal 
     function withdrawProposal() external returns (bool) {
         require(_votingParm.proposalK > 0,"withdrawProposal:proposalK element must > 0");
-        require( _votingParm.proposalSender == _msgSender() ,"withdrawProposal: _msgSender() must the proposaler");
+        require( _votingParm.proposalSender == msg.sender ,"withdrawProposal: msg.sender must the proposaler");
         if(block.number.sub(_votingParm.bgProposalBlock) > _voteDuration){
             return false;
         }
         _votingParm.bgProposalBlock = 0;
         _votingParm.proposalSender= address(0);
-       _votingParm.proposalK = 0;
-       _votingParm.against = 0;
-       _votingParm.approve = 0;
-       _votingParm.turnout = 0;
+        _votingParm.proposalK = 0;
+        _votingParm.against = 0;
+        _votingParm.approve = 0;
+        _votingParm.turnout = 0;
         return true;
     }
     // vote against
@@ -900,13 +901,13 @@ contract Treasury is Ownable {
         require(_votingParm.proposalK > 0,"approveVote:proposalK must > 0 ");
         require(_votingParm.bgProposalBlock > 0 && block.number.sub(_votingParm.bgProposalBlock)  > _voteDuration 
                 || block.number.sub(_votingParm.bgProposalBlock) < _voteDuration.mul(2));
-        if( _voterMap[_msgSender()].vote == true  && block.number.sub(_voterMap[_msgSender()].blockNo) < _voteDuration){
+        if( _voterMap[msg.sender].vote == true  && block.number.sub(_voterMap[msg.sender].blockNo) < _voteDuration){
             return false; 
         }
-        _votingParm.turnout += _relpUserArray[_msgSender()].rElpAmount;
-        _votingParm.against += _relpUserArray[_msgSender()].rElpAmount;
-        _voterMap[_msgSender()].vote = true;
-        _voterMap[_msgSender()].blockNo =  block.number;
+        _votingParm.turnout += _relpUserArray[msg.sender].rElpAmount;
+        _votingParm.against += _relpUserArray[msg.sender].rElpAmount;
+        _voterMap[msg.sender].vote = true;
+        _voterMap[msg.sender].blockNo =  block.number;
         return true;
     }
     // get vote result
@@ -939,26 +940,24 @@ contract Treasury is Ownable {
        _votingParm.turnout = 0;
        return votingRet;
     }
-    //check if _msgSender() voted in _voteDuration
+    //check if msg.sender voted in _voteDuration
     function checkHasVote() external view returns (bool){
-      if(_votingParm.bgProposalBlock == 0 || block.number.sub(_votingParm.bgProposalBlock) > _voteDuration.mul(2))
-      {
+      if(_votingParm.bgProposalBlock == 0 || block.number.sub(_votingParm.bgProposalBlock) > _voteDuration.mul(2)){
            return false;
       }  
-      return _voterMap[_msgSender()].vote;
+      return _voterMap[msg.sender].vote;
     }
     // get the approve votes amounts
     function getApproveTotal()external view returns(uint256){
-        return _votingParm.approve;
+       return _votingParm.approve;
     }
     // get the against votes amounts
     function getAgainstTotal()external view returns(uint256){
-        return _votingParm.against;
+       return _votingParm.against;
     }
-    //check if _msgSender() just an proposer in  _voteDuration
+    //check if msg.sender just an proposer in  _voteDuration
     function checkProposaler(address proposaler) public view returns (bool){
-      if(_votingParm.bgProposalBlock == 0 || block.number.sub(_votingParm.bgProposalBlock) > _voteDuration.mul(2))
-      {
+      if(_votingParm.bgProposalBlock == 0 || block.number.sub(_votingParm.bgProposalBlock) > _voteDuration.mul(2)){
            return false;
       }  
       return (_votingParm.proposalSender == proposaler);
