@@ -121,7 +121,8 @@ contract Treasury is Ownable {
     }
     // voter Map 
     mapping(address => voteInfo) private voterMap;
-   
+    // lock
+    uint256 private unlocked = 1;
     /* =================== Event =================== */
     event AddELP (address user,uint256 elp_amount,uint256 relp_amount,uint256 elc_amount);
     event WithdrawELP(address user, uint256 relp_amount,uint256 elc_amount,uint256 elp_amount);
@@ -210,7 +211,12 @@ contract Treasury is Ownable {
         updateCashPrice();
         _;
     }
-   
+    modifier lock() {
+        require(unlocked == 1, ' LOCKED');
+        unlocked = 0;
+        _;
+        unlocked = 1;
+    }
     /* ========== MUTABLE FUNCTIONS ========== */
     constructor(address elpContract, 
                 address elcContract,
@@ -500,7 +506,7 @@ contract Treasury is Ownable {
     }
     
     // expand cycle. raise ELC, swap ELC to ELP
-    function expansion() external updatePrice updateElcAim lrLess70 elcPriceOverUplimit expandInOneDayAg  returns(uint256) {
+    function expansion() external updatePrice updateElcAim lrLess70 elcPriceOverUplimit expandInOneDayAg lock  returns(uint256) {
         lastExpandTime = block.number;
         uint256 _elcSellAmount = expansionComputeElc();
         uint256 _elpAmount = 0;
@@ -533,7 +539,7 @@ contract Treasury is Ownable {
         return _elcSellAmount;
     }
     // contract cycle. swap ELP to ELC
-    function contraction() external updatePrice elcPriceOverDownlimit contractInOneDayAg  updateElcAim  returns(uint256) {
+    function contraction() external updatePrice elcPriceOverDownlimit contractInOneDayAg  updateElcAim  lock returns(uint256) {
         uint256 _elcAmount = 0;
         uint256 _elpNeedSell = contractionComputeElpNeed();
         lastContractTime = block.number;
