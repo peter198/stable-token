@@ -453,7 +453,7 @@ contract Treasury is Ownable {
         }
     }
     // swap token, for expansion and contraction
-    function swapToken(bool _elcBuyElpTag, uint256 _amountIn) public returns (uint256){
+    function swapToken(bool _elcBuyElpTag, uint256 _amountIn) internal returns (uint256){
         require( _amountIn > 0);
         address[] memory _path1 = new address[](3);
         uint256[] memory _amounts = new uint256[](_path1.length);
